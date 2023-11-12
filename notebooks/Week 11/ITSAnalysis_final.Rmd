@@ -1,0 +1,334 @@
+---
+title: "Interrupted Time Series Analysis"
+author: "KJ"
+date: "2023-11-12"
+output: html_document
+---
+### Interrupted Time Series Analysis (ITSA)
+
+## Introduction
+
+ITSA is a statistical method for analyzing longitudinal data that are susceptible to external events or interventions. ITSA allows us to estimate the effect of an intervention in the real world and evaluate whether it has been effective. ITSA can be used to evaluate interventions in various fields, such as healthcare, education, and policy.
+
+Watch the video on Interrupted Time Series Analysis: <https://www.youtube.com/watch?v=CYiDyLT6Wf4>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Install and Load Necessary Packages
+
+First, install and load the necessary packages. You'll need lme4 for linear mixed-effects models, and lmerTest for getting p-values.
+
+```{r installer}
+#install.packages("lme4")
+#install.packages("lmerTest")
+library(lme4)
+library(lmerTest)
+
+```
+
+## Load the data and Choose an Outcome Variable
+
+Load the data, and select an outcome variable for the analysis. For example, if you want to analyze the effect on 'fear_nrc', you would use this as your dependent variable.
+
+```{r prepare2}
+
+library(readr)
+combined_emotion<-read_csv("D:/Dropbox/aa_students/yuanyuan/combined_emotion.csv",show_col_types = FALSE)
+combined_emotion$date <- as.Date(combined_emotion$date)
+
+emotion_cols <- c("disgust_nrc", "fear_nrc", "trust_nrc", "anticipation_nrc", 
+                 "surprise_nrc", "anger_nrc", "joy_nrc", "sadness_nrc", 
+                 "POSEMO_liwc", "SAD_liwc", "NEGEMO_liwc", "ANGER_liwc", "ANX_liwc")
+```
+
+# Fill NA Values with 0
+
+```{r NAfiller}
+combined_emotion[emotion_cols] <- lapply(combined_emotion[emotion_cols], function(x) replace(x, is.na(x), 0))
+
+```
+
+# Calculate Mean, Max, and SD
+
+```{r meanmax}
+library(dplyr)
+stats <- combined_emotion %>%
+  select(all_of(emotion_cols)) %>%
+  summarise(across(everything(), list(mean = mean, max = max, sd = sd)))
+
+print(stats)
+```
+
+# Create Histograms for Each Column
+
+```{r histo}
+# Open a new window with specified size
+#windows(width=10, height=8)  # On mac, use X11()
+
+#par(mfrow = c(4, 4)) # Adjust the grid size based on the number of variables
+
+# Set smaller margins
+par(mar=c(2, 2, 2, 2))
+
+par(mfrow = c(3, 3)) # Adjust based on your needs
+
+for (col in emotion_cols) {
+  hist(combined_emotion[[col]], main = col, xlab = col)
+}
+```
+
+## Bootstrapping
+
+You have already calculated daily means.. but if you had raw files with individual-level observations, here is how you would prepare the data.
+
+Bootstrapping is a powerful statistical technique used for estimating the distribution of a statistic (like a mean or standard deviation) by resampling with replacement from the original data. It allows for the assessment of the variability or uncertainty of a statistical estimate when the true population distribution is unknown or the sample size is small. By repeatedly resampling the data and recalculating the statistic for each sample, bootstrapping builds an empirical distribution of the statistic. This empirical distribution can then be used to estimate confidence intervals, standard errors, and significance tests, providing a non-parametric alternative to traditional parametric methods. Bootstrapping is particularly useful because it is straightforward to implement and does not rely on assumptions about the data's underlying distribution, making it versatile for a wide range of applications.
+
+# Step 1 Load necessary libraries
+
+```{r libload}
+library(dplyr)
+library(tidyr)
+library(purrr)
+```
+
+# Step 2: Define the bootstrapping function
+
+Create a function that will perform the bootstrap sampling for each day. 
+
+```{r bootstrap}
+bootstrap_day <- function(data, n = 100) {
+  sample_n(data, size = n, replace = TRUE)
+}
+
+# Function to sample with replacement
+sample_with_replacement <- function(data, n = 100) {
+  if (nrow(data) >= n) {
+    sample_n(data, size = n, replace = TRUE)
+  } else {
+    sample_n(data, size = n, replace = TRUE, weight = rep(1/nrow(data), nrow(data)))
+  }
+}
+```
+
+# Step 3: Split Data by Day and Sample with Replacement
+
+```{r sampledata}
+set.seed(123) # For reproducibility
+
+
+# Apply the sampling function to each group
+## warning: this creates a HUGE FILE
+sampled_data <- combined_emotion %>% 
+  group_by(date, county) %>%
+  sample_with_replacement()
+
+# View the resulting dataframe
+print(sampled_data)
+
+
+```
+
+# Step 4: Aggregate to day level
+
+Assuming you want to take the mean of each emotion-related column at the day level. But this takes too long because we have 373 million rows! So we convert to data table format. As compared to data frame, data.table is a more memory-efficient format.
+
+```{r aggregate}
+library(data.table)
+setDT(sampled_data)  # Convert to data.table
+emotion_cols <- c("disgust_nrc", "fear_nrc", "trust_nrc", "anticipation_nrc", 
+                  "surprise_nrc", "anger_nrc", "joy_nrc", "sadness_nrc", 
+                  "POSEMO_liwc", "SAD_liwc", "NEGEMO_liwc", "ANGER_liwc", "ANX_liwc")
+
+
+day_level_aggregated <- sampled_data[, lapply(.SD, mean, na.rm = TRUE), by = .(date, county), .SDcols = emotion_cols]
+
+#day_level_aggregated <- sampled_data %>% 
+#  group_by(date,county) %>% 
+#  summarise(across(all_of(emotion_cols), mean, na.rm = TRUE))
+
+```
+
+## Prepare Your Data
+
+Ensure your data is in the correct format. The date column should be a Date or a numeric time variable. If necessary, create a time variable representing the time sequence (e.g., weeks, months) and a binary intervention variable indicating pre- and post-intervention periods.
+
+```{r prepare}
+
+day_level_aggregated$time <- as.numeric(day_level_aggregated$date) # Convert date to numeric time
+day_level_aggregated$intervention1 <- ifelse(day_level_aggregated$date >= as.Date("2020-12-14"), 1, 0) # Replace "YYYY-MM-DD" with intervention date
+day_level_aggregated$intervention2 <- ifelse(day_level_aggregated$date >= as.Date("2020-11-09"), 1, 0) # Replace "YYYY-MM-DD" with intervention date
+
+```
+
+## Model Specification
+
+Specify the mixed-effects model using lmer from the lme4 package. The basic model includes fixed effects for time, intervention, and an interaction term between time and intervention. Random effects are included for the 'county' to account for clustering.
+
+```{r modelspec}
+library(lmerTest)
+model <- lmer(fear_nrc ~ time + intervention1 + time:intervention1 + (1 | county), data = day_level_aggregated)
+
+```
+
+The linear mixed-effects model was fit using the `lmer` function to analyze the impact of an intervention over time on the `fear_nrc` response variable, accounting for the random effects due to different 'counties'.
+
+This formula indicates that fear_nrc is predicted as a function of time, intervention1, and their interaction. The (1 \| county) term suggests that random intercepts for each county are included.
+
+# Model checking
+
+Check the model for assumptions like normality of residuals and homoscedasticity. You can use diagnostic plots for this.
+
+```{r modelcheck}
+plot(residuals(model))
+plot(model)
+```
+
+## Results Interpretation
+
+The key coefficients are the intervention term and the interaction term. The intervention term indicates the immediate effect of the intervention, and the interaction term shows the change in the trend post-intervention.
+
+The model suggests a statistically significant impact of time and the intervention on fear_nrc, along with a significant interaction effect. However, the effect sizes are small, indicating the need for careful consideration of their practical significance.
+
+The high correlations among predictors and the warning about different scales suggest the need for model refinement. The minimal variance in random effects across counties suggests that the county factor does not contribute much to the variability in fear_nrc.
+
+```{r interpret}
+summary(model)
+```
+
+# REML Criterion
+
+The REML criterion at convergence is -1771912. This value is used for estimating the variance components in the model.
+
+# Scaled Residuals
+
+The range of scaled residuals (-3.927 to 62.940) suggests the presence of outliers or extreme values in the residuals, indicating potential model misspecification or the presence of influential observations.
+
+# Random Effects
+
+Random effects:
+ Groups   Name        Variance  Std.Dev.
+ county   (Intercept) 3.399e-05 0.00583 
+ Residual             4.843e-04 0.02201 
+Number of obs: 373945, groups:  county, 3401
+The variance in the intercepts across counties is very small, suggesting minimal variation between counties.
+
+# Fixed Effects
+Correlation of Fixed Effects:
+            (Intr) time   intrv1
+time        -1.000              
+interventn1 -0.709  0.709       
+tm:ntrvntn1  0.711 -0.711 -1.000
+
+time: A very small positive effect of time on fear_nrc, statistically significant. intervention1: Associated with a decrease in fear_nrc, statistically significant. time:intervention1: Indicates a change in the effect of time on fear_nrc post-intervention, statistically significant.
+
+# Creating a Loess plot
+
+We have day_level_aggregated dataset with a fear_nrc column, and we're interested in visualizing how this variable changes relative to an intervention date. The date_diff field indicates days relative to the intervention. 
+
+First, we convert 'date' to a numeric interval if it's not already. 
+This time, we will aggregate ignoring county-level differences. we want a single plot showing what's going on.
+
+```{r aggregate2}
+library(data.table)
+setDT(day_level_aggregated)  # Convert to data.table
+emotion_cols <- c("disgust_nrc", "fear_nrc", "trust_nrc", "anticipation_nrc", 
+                  "surprise_nrc", "anger_nrc", "joy_nrc", "sadness_nrc", 
+                  "POSEMO_liwc", "SAD_liwc", "NEGEMO_liwc", "ANGER_liwc", "ANX_liwc")
+
+
+day_level <- day_level_aggregated[, lapply(.SD, mean, na.rm = TRUE), by = .(date), .SDcols = emotion_cols]
+
+```
+
+## Assuming 'day_level_aggregated' contains columns 'date' and 'fear_nrc'
+
+We'll need to create two columns, fear_nrc_before and fear_nrc_after, which will represent the fear_nrc values before and after the intervention, respectively.
+
+Here's how to adjust the dataset and create a ggplot:
+ 
+Create a variable to represent the number of days relative to the intervention date (date_diff).
+Split the data into two parts: one for the period before the intervention (d_before) and one for the period after the intervention (d_after).
+Merge these datasets back together so that you have a continuous dataset with the intervention point as a reference.
+
+
+```{r preparedataforloess}
+library(dplyr)
+intervention_date <- as.Date("2020-12-14")
+day_level$date <- as.Date(day_level$date)
+
+# Calculate the number of days relative to the intervention date
+day_level$date_diff <- day_level$date - intervention_date
+
+# Data before the intervention
+d_before <- day_level %>% filter(date_diff < 0)
+
+# Data after the intervention
+d_after <- day_level %>% filter(date_diff >= 0)
+
+# Assuming you want to merge on the interval (number of days relative to the intervention)
+d_merge <- merge(d_before, d_after, by = "date_diff", all = TRUE)
+
+#create two columns for the line before and afer the intervention
+
+d_merge <- day_level %>%
+  mutate(fear_nrc_before = ifelse(date_diff < 0, fear_nrc, NA),
+         fear_nrc_after = ifelse(date_diff >= 0, fear_nrc, NA))
+
+d_merge$date_diff<-as.numeric(d_merge$date_diff)
+#hist(d_merge$date_diff)
+```
+
+Now plot it
+```{r loess1}
+library(ggplot2)
+
+ggplot() +
+  geom_vline(xintercept = 0, linetype="solid", col="black", alpha=0.3, size=0.5) +
+  
+  geom_point(data = d_merge, aes(x = date_diff, y = fear_nrc_before), color = "blue", alpha = 0.3, shape = 16, size = 0.3) +
+  geom_smooth(data = d_merge, aes(x = date_diff, y = fear_nrc_before), method = "loess", color = "blue", se = TRUE, size = 1, span = 0.5, fill = "grey90") +
+  
+  geom_point(data = d_merge, aes(x = date_diff, y = fear_nrc_after), color = "green", alpha = 0.3, shape = 16, size = 0.3) +
+  geom_smooth(data = d_merge, aes(x = date_diff, y = fear_nrc_after), method = "loess", color = "green", se = TRUE, size = 1, span = 0.5, fill = "grey90") +
+  
+  theme_minimal() +
+  labs(
+    title = "Loess Plot of Fear NRC Before and After Intervention",
+    x = "Days Relative to Intervention",
+    y = "Fear NRC"
+  )
+
+```
+## Extra: Normalizing the Data
+
+Here's how you can normalize each emotion-related variable in your combined_emotion dataframe to have a mean of 0 and a standard deviation of 1:
+
+```{r normalize}
+# Normalize the data (standardization)
+combined_emotion_normalized <- combined_emotion
+combined_emotion_normalized[emotion_cols] <- scale(combined_emotion[emotion_cols])
+
+# Check the structure of the normalized data
+# str(combined_emotion_normalized)
+```
+
+# Creating Histograms of Normalized Data
+
+After normalizing, you can create histograms to visualize the distribution of each normalized variable:
+
+```{r histonormal}
+
+# Set smaller margins
+
+par(mar=c(2, 2, 2, 2))
+
+par(mfrow = c(3, 3)) # Adjust based on your needs
+
+# Create histograms for each emotion-related variable
+
+for (col in emotion_cols) {
+  hist(combined_emotion_normalized[[col]], main = col, xlab = col, breaks = 30) }# 'breaks' controls the number of bins 
+```
+

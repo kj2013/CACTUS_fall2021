@@ -1,0 +1,331 @@
+---
+title: "ITS Tutorial"
+author: "KJ"
+date: "2023-11-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##  Introduction to interrupted time series analysis
+
+
+```{r libload}
+# Load necessary libraries
+library(tidyverse)  # For data manipulation
+library(lubridate)  # For handling date-time data
+library(broom)      # For tidying model outputs
+#install.packages("tsModel") # For time series analysis
+library(tsModel)    
+
+```
+
+# Create a dummy variable
+```{r dummy}
+
+# Load necessary library
+library(lubridate)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Create a sequence of monthly dates from January 2020 to December 2022
+dates <- seq(from = as.Date("2020-01-01"), to = as.Date("2022-12-31"), by = "month")
+
+# Generate random data for the outcome variable
+outcome_variable <- rnorm(length(dates))
+
+# Create an intervention variable (assuming an intervention at the midpoint)
+intervention <- ifelse(dates < as.Date("2021-07-01"), 0, 1)
+
+# Combine into a data frame
+data_frame <- data.frame(date = dates, outcome_variable = outcome_variable, intervention = intervention)
+
+# View the first few rows of the dummy data frame
+head(data_frame)
+
+
+```
+
+
+
+## Data preparation and handling missing values
+
+Prepare your data by handling missing values and ensuring proper date formatting.
+```{r missing}
+# Handle missing values
+data_frame $outcome_variable <- ifelse(is.na(data_frame$outcome_variable), mean(data_frame$outcome_variable, na.rm = TRUE), data_frame$outcome_variable)
+
+```
+
+This is what an ITS model looks like:
+its_model <- lm(outcome_variable ~ time_variable + intervention_factor + time_since_intervention, data = data_frame)
+
+
+If your data frame data_frame contains a variable named date and you want to create the variables time_variable, as.factor(intervention), and time_since_intervention, you can follow these steps:
+
+Assuming date is a timestamp, we can create the time_variable as the difference in time from the start date. Additionally, we can create a factor variable for intervention and calculate time_since_intervention. Here's an example:
+
+```{r allvars}
+
+# Assuming 'date' is in Date format, you may need to adjust if it's in a different format
+data_frame$date <- as.Date(data_frame$date)
+
+# Create time_variable as the difference in time from the start date
+data_frame$time_variable <- as.numeric(difftime(data_frame$date, min(data_frame$date), units = "days"))
+
+# Create as.factor(intervention)
+data_frame$intervention_factor <- as.factor(data_frame$intervention)
+
+# Create time_since_intervention
+data_frame$time_since_intervention <- ifelse(data_frame$intervention == 1, data_frame$time_variable, 0)
+
+
+```
+
+## Assumptions and requirements for ITS analysis with ARIMA models
+
+
+# Step 1: Checking for Stationarity
+
+The data must be stationary for an ARIMA model. Stationarity means that the statistical properties of the process generating the time series do not change over time. You can use the Augmented Dickey-Fuller (ADF) test to check for stationarity.
+
+```{r assumptions}
+# Check for stationarity (an assumption of ITS)
+library(tseries)
+
+# Apply the Augmented Dickey-Fuller Test
+adf.test(data_frame$outcome_variable, alternative = "stationary")
+
+# Interpretation:
+# If the p-value is low (typically < 0.05), the null hypothesis of a unit root is rejected, indicating stationarity.
+
+
+```
+# Step 2: Determining the order of differencing (d)
+
+You need to find the right level of differencing (d) to make the series stationary if it's not already.
+
+```{r diff}
+# Use ndiffs() to find the appropriate differencing order
+library(forecast)
+d <- ndiffs(data_frame$outcome_variable)
+
+# Interpretation:
+# The value of d is the recommended number of differences required for stationarity.
+
+
+```
+
+If the result of ndiffs(data_frame$outcome_variable) suggests that differencing is needed (i.e., d>0), and after applying the initial differencing, the time series is still not stationary, you should continue differencing until stationarity is achieved. You can do this by incrementing the order of differencing and re-evaluating stationarity using methods like the Augmented Dickey-Fuller (ADF) test.
+
+```{r diffing}
+# Initial differencing
+
+diff1 <- diff(data_frame$outcome_variable)
+
+data_frame$diff1<-c(NA,diff1)
+
+# Check stationarity after the first differencing
+adf_test_result_diff1 <- adf.test(na.omit(data_frame$diff1), alternative = "stationary")
+
+# Print the results
+print(adf_test_result_diff1)
+
+# If the series is still not stationary, continue differencing
+if (adf_test_result_diff1$p.value > 0.05) {
+  # Incremental differencing
+  data_frame$diff2 <- diff(data_frame$diff1)
+
+  # Check stationarity after the second differencing
+  adf_test_result_diff2 <- adf.test(data_frame$diff2, alternative = "stationary")
+
+  # Print the results
+  print(adf_test_result_diff2)
+
+  # Repeat as needed
+}
+
+```
+
+# Step 3:  Identifying the Order of AR (p) and MA (q) components
+
+Autocorrelation Function (ACF) and Partial Autocorrelation Function (PACF) plots are used to identify potential AR and MA terms.
+
+```{r order}
+# ACF and PACF plots
+acf(data_frame$outcome_variable, lag.max = 20)
+pacf(data_frame$outcome_variable, lag.max = 20)
+
+# Interpretation:
+# The number of significant lags in the PACF after differencing indicates the AR order (p).
+# The number of significant lags in the ACF after differencing indicates the MA order (q).
+
+```
+
+## Step 4: Model selection
+
+The auto.arima() function in the forecast package automatically selects the best ARIMA model based on information criteria like AIC or BIC.
+
+```{r modelsel}
+# Automatic ARIMA modeling
+best_arima_model <- auto.arima(data_frame$outcome_variable)
+
+# View the selected model
+summary(best_arima_model)
+
+```
+
+## Step 5 Residual diagnostics
+
+After fitting the model, it's important to check the residuals to ensure that they are uncorrelated and normally distributed.
+
+```{r resid}
+# Check residuals
+checkresiduals(best_arima_model)
+
+# Interpretation:
+# Residuals should not show any patterns and should be normally distributed for a good model fit.
+
+
+```
+# Brief overview of ITS
+
+Use linear models or ARIMA models for ITS analysis. Here's an example using linear models
+
+```{r overview}
+# Load necessary library
+library(lmtest)
+
+# Creating a time variable (numeric representation of dates)
+data_frame$time <- as.numeric(data_frame$date)
+
+# Segmented regression model
+its_model <- lm(outcome_variable ~ time + intervention, data = data_frame)
+
+# Check for autocorrelation
+bptest(its_model)
+
+```
+
+## Choosing the method or model
+```{r modelchoose}
+
+# Load the necessary library
+library(forecast)  # For time series analysis and modeling
+
+# Assess the time series plot
+plot(ts(data_frame$outcome_variable), main="Time Series Plot", xlab="Time", ylab="Outcome Variable")
+
+# Assess the autocorrelation and partial autocorrelation
+acf(ts(data_frame$outcome_variable))
+pacf(ts(data_frame$outcome_variable))
+
+# Determine if differencing is required
+ndiffs(data_frame$outcome_variable)
+
+
+```
+## ITS model specification and estimation in R
+
+```{r modelspec}
+# Define the ITS model
+its_model <- lm(outcome_variable ~ time_variable + as.factor(intervention) + time_since_intervention, data = data_frame)
+
+# Estimate the ITS model
+its_estimation <- summary(its_model)
+
+```
+
+## Another way: ARIMA models
+
+Segmented regression is useful for modeling before-and-after effects of interventions.
+ARIMA models are effective for time series data with trends and seasonality.
+auto.arima() automatically selects the best ARIMA model based on AIC, and forecast() is used to make future predictions.
+
+```{r arima}
+
+# Load the necessary libraries
+#install.packages("segmented")
+library(segmented)  # For segmented regression analysis
+library(forecast)   # For ARIMA models
+
+# Segmented regression
+seg_model <- lm(outcome_variable ~ time_variable + intervention + time_variable*intervention, data = data_frame)
+```
+
+
+# Check for significant breakpoints
+
+```{r breakpoints}
+
+# Assuming 'time_variable' is the variable used for segmentation
+initial_breakpoints <- c(24,30)  # Adjust with your expected intervention points
+
+
+
+# Assuming 'time_variable' is the variable used for segmentation
+quantiles <- quantile(data_frame$time_variable, probs = c( 0.5, 0.75))  # Adjust as needed
+seg_model_seg <- segmented(seg_model, seg.Z = ~ time_variable, psi = list(time_variable = quantiles))
+
+summary(seg_model)
+# ARIMA model
+arima_model <- auto.arima(data_frame$outcome_variable)
+
+# Fitting the model
+fit <- arima_model %>% forecast(h = 20)  # 'h' is the forecast horizon
+
+# Plotting the forecast
+plot(fit)
+
+```
+## Interpreting and visualising ITS analysis results
+
+```{r viz}
+# Visualising the results
+library(ggplot2)
+ggplot(data_frame, aes(x = time_variable, y = outcome_variable)) +
+  geom_line() +
+  geom_vline(xintercept = as.numeric(intervention), linetype="dashed", color = "red") +
+  geom_smooth(method = "lm", se = FALSE)
+
+# Interpreting the model output
+tidy(its_model)
+
+# Summarize segmented regression model
+summary(seg_model)
+
+# Check for significant breakpoints
+confint(seg_model_seg, "psi1")
+confint(seg_model_seg, "psi2")
+
+# Summarize ARIMA model
+summary(arima_model)
+
+# Check the forecast accuracy
+accuracy(fit)
+
+```
+
+The summary of the segmented regression model shows the coefficients and their significance.
+Confidence intervals for breakpoints in the segmented model help to understand the impact of the intervention.
+The summary of the ARIMA model provides insights into the best-fitting model and its parameters.
+Forecast accuracy metrics like MAE, RMSE, etc., are used to assess the performance of the model.
+
+## Common challenges and solution approaches in ITS analysis
+
+```{r autocrr}
+# Addressing autocorrelation with Newey-West standard errors
+library(sandwich)
+coeftest(its_model, vcov = NeweyWest(its_model))
+
+# Dealing with non-stationarity
+ndiffs(data_frame$outcome_variable) # Check how many differences are needed to make the series stationary
+
+# Apply differencing if needed
+data_diff <- diff(data_frame$outcome_variable)
+
+```
+
