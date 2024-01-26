@@ -1,12 +1,12 @@
-id,text,userId,createdAt,updatedAt,groupId,parentId
-117,I think that just having the presence of a good guy with a gun would prevent any action by a bad guy with a gun.,88270,23/6/2019 14:58,23/6/2019 14:58,20002,
-118,Good question! And thats why I think gun control laws do not deter crime; gun ownership deters crime!!,92345,23/6/2019 14:58,23/6/2019 14:58,10001,
-121,The only defense for a nuclear attack is to send up our own nukes to intercept them. Same goes for guns.,12345,23/6/2019 14:59,23/6/2019 14:59,20002,
-122,"Guns aren't the problem, people are the problem. We need to stop punishing law abiding citizens who own guns because of the actions of a group of deranged people who shouldn't have them.",88270,23/6/2019 15:00,23/6/2019 15:00,20002,
-123,A good gun with a gun would cause most bad guys with a gun not to use their guns.,84456,23/6/2019 15:00,23/6/2019 15:00,20002,
-124,"All the trategies we were talking about would still happen, even if Auto GUNS DIDNT EXIST. Same amount of people, same outcome.",92345,23/6/2019 15:00,23/6/2019 15:00,10001,
-125,The only defense for a nuclear attack is to send up our own nukes to intercept them. Same goes for guns.,12345,23/6/2019 15:01,23/6/2019 15:01,20002,
-126,"All of these dangerous cases exist, only because guns exist in the first place. Remove them all and violence will drop dramatically.",45678,23/6/2019 15:01,23/6/2019 15:01,20002,
-127,"Well, that's obviously untrue. Even if you think automatic guns should be legal, they clearly make it easier to kill more people in a shorter amount of time.",53385,23/6/2019 15:01,23/6/2019 15:01,10001,
-128,"Having a gun does not lead to violence and gang, having a mentality that seeks to force your will on another DOES lead to gang and crime.",12345,23/6/2019 15:02,23/6/2019 15:02,20002,
-129,"All of these dangerous cases exist, only because guns exist in the first place. Remove them all and violence will drop dramatically.",45678,23/6/2019 15:02,23/6/2019 15:02,20002,
+id,text,userId,createdAt,updatedAt,groupId,label
+117,I think that just having the presence of a good guy with a gun would prevent any action by a bad guy with a gun.,88270,23/6/2019 14:58,23/6/2019 14:58,20002,0
+118,Good question! And thats why I think gun control laws do not deter crime; gun ownership deters crime!!,92345,23/6/2019 14:58,23/6/2019 14:58,10001,1
+121,The only defense for a nuclear attack is to send up our own nukes to intercept them. Same goes for guns.,12345,23/6/2019 14:59,23/6/2019 14:59,20002,0
+122,"Guns aren't the problem, people are the problem. We need to stop punishing law abiding citizens who own guns because of the actions of a group of deranged people who shouldn't have them.",88270,23/6/2019 15:00,23/6/2019 15:00,20002,1
+123,A good gun with a gun would cause most bad guys with a gun not to use their guns.,84456,23/6/2019 15:00,23/6/2019 15:00,20002,0
+124,"All the trategies we were talking about would still happen, even if Auto GUNS DIDNT EXIST. Same amount of people, same outcome.",92345,23/6/2019 15:00,23/6/2019 15:00,10001,1
+125,The only defense for a nuclear attack is to send up our own nukes to intercept them. Same goes for guns.,12345,23/6/2019 15:01,23/6/2019 15:01,20002,0
+126,"All of these dangerous cases exist, only because guns exist in the first place. Remove them all and violence will drop dramatically.",45678,23/6/2019 15:01,23/6/2019 15:01,20002,1
+127,"Well, that's obviously untrue. Even if you think automatic guns should be legal, they clearly make it easier to kill more people in a shorter amount of time.",53385,23/6/2019 15:01,23/6/2019 15:01,10001,0
+128,"Having a gun does not lead to violence and gang, having a mentality that seeks to force your will on another DOES lead to gang and crime.",12345,23/6/2019 15:02,23/6/2019 15:02,20002,1
+129,"All of these dangerous cases exist, only because guns exist in the first place. Remove them all and violence will drop dramatically.",45678,23/6/2019 15:02,23/6/2019 15:02,20002,0
